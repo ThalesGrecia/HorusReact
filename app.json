@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "HorusReact",
+    "slug": "HorusReact",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "entryPoint": "./node_modules/expo-router",
+    "main": "./app/index.tsx",
+    "icon": "./assets/HorusIcon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/SplashHorusV3.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/HorusIcon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.thalesgrecia.HorusReact"
+    },
+    "web": {
+      "favicon": "./assets/HorusIcon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "aef01c0d-bf4b-4ac1-902f-f008d1d3eaf4"
+      }
+    }
+  }
+}
