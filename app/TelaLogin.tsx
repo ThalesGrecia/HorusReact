@@ -79,10 +79,10 @@ export default function TelaLogin() {
           />
 
           <View style={styles.card}>
-            <Text style={styles.title}>Faça o seu login</Text>
+            <Text style={styles.title}>Faça seu Login</Text>
             <View style={styles.separator} />
 
-            <Text style={styles.label}>Seu e-mail*</Text>
+            <Text style={styles.label}>Seu email*</Text>
             <TextInput 
               placeholder="Digite seu e-mail" 
               placeholderTextColor="#8c8c8c" 

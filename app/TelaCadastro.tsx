@@ -70,7 +70,7 @@ export default function TelaCadastro() {
        
           
           <View style={styles.card}>
-            <Text style={styles.title}>Faça o seu cadastro</Text>
+            <Text style={styles.title}>Faça seu cadastro</Text>
             <View style={styles.separator} />
 
             <Text style={styles.label}>Seu e-mail*</Text>

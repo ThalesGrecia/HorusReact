@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 import { db } from './firebaseConfig';
-import { ref, get } from 'firebase/database';
+import { ref, get, onValue } from 'firebase/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigate, useLocation } from 'react-router-native';
 
@@ -11,15 +11,15 @@ const screenWidth = Dimensions.get('window').width;
 const chartConfig = {
   backgroundGradientFrom: '#ffffff',
   backgroundGradientTo: '#ffffff',
-  color: (opacity = 1) => `rgba(0, 100, 0, ${opacity})`, // verde escuro para elementos do gráfico
-  labelColor: (opacity = 1) => `rgba(0, 80, 0, ${opacity})`, // ainda mais escuro para os rótulos
+  color: (opacity = 1) => `rgba(0, 100, 0, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(0, 80, 0, ${opacity})`,
   propsForDots: {
     r: '4',
     strokeWidth: '2',
-    stroke: '#006400', // verde escuro (hex)
+    stroke: '#006400',
   },
   propsForBackgroundLines: {
-    stroke: '#a0d6a0', // verde claro mais discreto
+    stroke: '#a0d6a0',
   },
 };
 
@@ -34,64 +34,69 @@ export default function TelaGraficos() {
   const [rpm2Data, setRpm2Data] = useState<number[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
 
+  const reloadData = async () => {
+    setLoading(true);
+    await fetchData();
+    setLoading(false);
+  };
+
+  const clearChartData = () => {
+    setPhData([]);
+    setTempData([]);
+    setRpm1Data([]);
+    setRpm2Data([]);
+    setLabels([]);
+  };
+
+  const fetchData = () => {
+  const projetoRef = ref(db, 'Projeto');
+
+  onValue(projetoRef, (snapshot) => {
+    const projetoData = snapshot.val();
+    const sensores = projetoData?.Input?.Sensores || {};
+    const dados = projetoData?.Output?.Dados || {};
+
+    const temperatura = sensores.TempC ?? 0;
+    const distancia = sensores.Distancia ?? 0;
+    const nivel = sensores.NivelReal ?? 0;
+    const volume = sensores.Volume ?? 0;
+
+    const velocidade = dados.Velocidade ?? 0;
+    const temperaturaOut = dados.Temperatura ?? 0;
+
+    const now = new Date();
+    const label = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+
+    // Mantém últimos 10 pontos
+    setTempData(prev => [...prev.slice(-9), temperatura]);
+    setPhData(prev => [...prev.slice(-9), Number(temperaturaOut)]);
+    setRpm1Data(prev => [...prev.slice(-9), Number(velocidade)]);
+    setRpm2Data(prev => [...prev.slice(-9), Number(volume)]);
+    setLabels(prev => [...prev.slice(-9), label]);
+
+    setLoading(false);
+  });
+};
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const snapshot = await get(ref(db));
-        const data = snapshot.val();
-  
-        const extractValues = (obj: any) =>
-          obj
-            ? Object.values(obj)
-                .filter((item: any) => item?.value !== undefined)
-                .map((item: any) => ({ value: item.value, timestamp: item.timestamp }))
-            : [];
-  
-        const ph = extractValues(data.phReadings);
-        const temp = extractValues(data.temperatureReadings);
-        const rpm1 = extractValues(data.rpmBomba1Readings);
-        const rpm2 = extractValues(data.rpmBomba2Readings);
-  
-        setPhData(ph.map((d: any) => d.value));
-        setTempData(temp.map((d: any) => d.value));
-        setRpm1Data(rpm1.map((d: any) => d.value / 100));
-        setRpm2Data(rpm2.map((d: any) => d.value / 100));
-  
-        // Datas abreviadas e alternadas
-        const formattedLabels = ph.map((d: any) => {
-          const date = new Date(d.timestamp);
-          return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-        });
-  
-        // Mostra um rótulo a cada dois
-        const reducedLabels = formattedLabels.map((label, index) => (index % 2 === 0 ? label : ''));
-  
-        setLabels(reducedLabels);
-      } catch (error) {
-        console.error('Erro ao buscar dados do Firebase:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-  
-    fetchData();
-  }, []);
+  fetchData();
+}, []);
 
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.container}>
         <Text style={styles.text}>Análise de Dados</Text>
+         <View style={styles.underline} />
 
         {loading ? (
-          <ActivityIndicator size="large" color="#0000ff" />
+          <ActivityIndicator size="large" color="green" />
         ) : (
           <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
             {/* Página 1 */}
             <View style={styles.page}>
-              <Text style={styles.chartTitle}>Histórico de pH</Text>
+              <Text style={styles.chartTitle}>Temperatura Atual (TempC)</Text>
               <View style={styles.card}>
                 <BarChart
-                  data={{ labels: labels.slice(-6), datasets: [{ data: phData.slice(-6) }] }}
+                  data={{ labels, datasets: [{ data: tempData }] }}
                   width={screenWidth - 72}
                   height={220}
                   chartConfig={chartConfig}
@@ -99,10 +104,10 @@ export default function TelaGraficos() {
                 />
               </View>
 
-              <Text style={styles.chartTitle}>Temperatura</Text>
+              <Text style={styles.chartTitle}>Ph</Text>
               <View style={styles.card}>
                 <LineChart
-                  data={{ labels: labels.slice(-6), datasets: [{ data: tempData.slice(-6) }] }}
+                  data={{ labels, datasets: [{ data: phData }] }}
                   width={screenWidth - 72}
                   height={220}
                   chartConfig={chartConfig}
@@ -114,10 +119,10 @@ export default function TelaGraficos() {
 
             {/* Página 2 */}
             <View style={styles.page}>
-              <Text style={styles.chartTitle}>RPM Bomba 1</Text>
+              <Text style={styles.chartTitle}>Velocidade da Bomba (RPM)</Text>
               <View style={styles.card}>
                 <LineChart
-                  data={{ labels: labels.slice(-6), datasets: [{ data: rpm1Data.slice(-6) }] }}
+                  data={{ labels, datasets: [{ data: rpm1Data }] }}
                   width={screenWidth - 72}
                   height={220}
                   chartConfig={chartConfig}
@@ -126,10 +131,10 @@ export default function TelaGraficos() {
                 />
               </View>
 
-              <Text style={styles.chartTitle}>RPM Bomba 2</Text>
+              <Text style={styles.chartTitle}>Volume Estimado</Text>
               <View style={styles.card}>
                 <LineChart
-                  data={{ labels: labels.slice(-6), datasets: [{ data: rpm2Data.slice(-6) }] }}
+                  data={{ labels, datasets: [{ data: rpm2Data }] }}
                   width={screenWidth - 72}
                   height={220}
                   chartConfig={chartConfig}
@@ -140,6 +145,19 @@ export default function TelaGraficos() {
             </View>
           </ScrollView>
         )}
+      </View>
+
+      {/* Botões de ação */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginVertical: 10 }}>
+        <TouchableOpacity onPress={reloadData} style={styles.reloadButton}>
+          <Ionicons name="refresh" size={20} color="white" />
+          <Text style={styles.reloadText}>Recarregar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={clearChartData} style={[styles.reloadButton, { backgroundColor: '#888' }]}>
+          <Ionicons name="close-circle" size={20} color="white" />
+          <Text style={styles.reloadText}>Limpar</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Barra de Navegação */}
@@ -166,14 +184,17 @@ export default function TelaGraficos() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
+    
     backgroundColor: '#fff',
     paddingBottom: 70,
   },
   text: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginVertical: 10,
+    color: '#000',
+    textAlign: 'left',
+    marginTop: '5%',
+    paddingLeft: 20,
   },
   page: {
     width: Dimensions.get('window').width,
@@ -204,6 +225,19 @@ const styles = StyleSheet.create({
     elevation: 5,
     width: screenWidth - 40,
   },
+  reloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'green',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  reloadText: {
+    color: '#fff',
+    marginLeft: 6,
+    fontWeight: 'bold',
+  },
   navBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -220,7 +254,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   activeButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 5,
+  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+},
+  underline: {
+    height: 3,
+    width: '45%',
+    backgroundColor: 'green',
+    marginVertical: 8,
+    marginLeft: 20,
+    marginTop: 5
   },
-});
+})

@@ -30,57 +30,50 @@ export default function TelaControle() {
   const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    const statusRef = ref(db, 'bombaAguaStatus');
-    const configuracoesRef = ref(db, 'configuracoesAtuais');
+  const dadosRef = ref(db, 'Projeto/Output/Dados');
+  const bombaRef = ref(db, 'Projeto/Output/Atuadores/Bomba1');
 
-    const statusListener = onValue(statusRef, (snapshot) => {
-      setBombaLigada(snapshot.val()?.ligada || false);
-    });
+  const dadosListener = onValue(dadosRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const dados = snapshot.val();
+      setRpm1(String(dados.Velocidade ?? ''));
+      setRpm2(String(dados.RPM2 ?? '')); // Caso queira expandir
+      setTemperatura(String(dados.Temperatura ?? ''));
+      setPh(String(dados.Ph ?? ''));
+    }
+  });
 
-    const configuracoesListener = onValue(configuracoesRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const config = snapshot.val();
-        setRpm1(String(config.rpm1 ?? ''));
-        setRpm2(String(config.rpm2 ?? ''));
-        setTemperatura(String(config.temperatura ?? ''));
-        setPh(String(config.ph ?? ''));
-      }
-    });
+  const bombaListener = onValue(bombaRef, (snapshot) => {
+    setBombaLigada(snapshot.val() === true);
+  });
 
-    return () => {
-      off(statusRef, statusListener);
-      off(configuracoesRef, configuracoesListener);
-    };
-  }, []);
+  return () => {
+    off(dadosRef, dadosListener);
+    off(bombaRef, bombaListener);
+  };
+}, []);
 
   const salvarConfiguracoes = async () => {
-    setLoading(true);
-    try {
-      const timestamp = new Date().toISOString();
+  setLoading(true);
+  try {
+    const novosDados = {
+      Velocidade: rpm1 !== '' ? Number(rpm1) : 0,
+      Temperatura: temperatura !== '' ? Number(temperatura) : 0,
+      Ph: ph !== '' ? Number(ph) : 0,
+      // RPM2 pode ser incluído, se for usado
+    };
 
-      const novosDados = {
-        ligada: bombaLigada,
-        rpm1: rpm1 !== '' ? Number(rpm1) : 0,
-        rpm2: rpm2 !== '' ? Number(rpm2) : 0,
-        temperatura: temperatura !== '' ? Number(temperatura) : 0,
-        ph: ph !== '' ? Number(ph) : 0,
-        timestamp,
-      };
+    await set(ref(db, 'Projeto/Output/Dados'), novosDados);
+    await set(ref(db, 'Projeto/Output/Atuadores/Bomba1'), bombaLigada);
 
-      await set(ref(db, 'configuracoesAtuais'), novosDados);
+    alert('Configurações salvas com sucesso!');
+  } catch (error) {
+    console.error('Erro ao salvar configurações:', error);
+    alert('Erro ao salvar configurações.');
+  }
+  setLoading(false);
+};
 
-      await push(ref(db, 'rpmBomba1Readings'), { timestamp, value: novosDados.rpm1 });
-      await push(ref(db, 'rpmBomba2Readings'), { timestamp, value: novosDados.rpm2 });
-      await push(ref(db, 'temperatureReadings'), { timestamp, value: novosDados.temperatura });
-      await push(ref(db, 'phReadings'), { timestamp, value: novosDados.ph });
-
-      alert('Configurações salvas com sucesso!');
-    } catch (error) {
-      console.error('Erro ao salvar configurações:', error);
-      alert('Erro ao salvar configurações.');
-    }
-    setLoading(false);
-  };
 
   return (
     <KeyboardAvoidingView

@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { db } from './firebaseConfig';
-import { ref, get } from 'firebase/database';
+import { ref, get,  onValue } from 'firebase/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigate } from 'react-router-native';
 import { useLocation } from 'react-router-native';
+
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -44,16 +45,18 @@ export default function TelaMonitoramento() {
 
   const [loading, setLoading] = useState(true);
   const [activeScreen, setActiveScreen] = useState(0);
+  const [nivelAgua, setNivelAgua] = useState<number | null>(null);
+
 
    const navigate = useNavigate(); // Obtém a função de navegação
    const location = useLocation();
 
-  useEffect(() => {
+  /*useEffect(() => {
     const interval = setInterval(() => {
       reloadData();
     }, 20000);
     return () => clearInterval(interval);
-  }, []);
+  }, []);*/
 
   const fetchData = async (path: string) => {
     try {
@@ -67,7 +70,7 @@ export default function TelaMonitoramento() {
   };
 
   const fetchPhData = async () => {
-    const data = await fetchData('phReadings');
+    const data = await fetchData('Projeto/Dados/Ph');
     if (data.length > 0) {
       const values = data.map((reading: any) => reading.value);
       const timestamps = data.map((reading: any) => new Date(reading.timestamp).toLocaleDateString('pt-BR'));
@@ -79,23 +82,43 @@ export default function TelaMonitoramento() {
     }
   };
 
-  const fetchTemperatureData = async () => {
-    const data = await fetchData('temperatureReadings');
-    if (data.length > 0) {
-      const values = data.map((reading: any) => reading.value);
-      const timestamps = data.map((reading: any) => new Date(reading.timestamp).toLocaleDateString('pt-BR'));
-      setTemperatureValues(values);
-      setTemperatureLabels(timestamps);
-      setMaxTemp(Math.max(...values));
-      setMinTemp(Math.min(...values));
-      setCurrentTemp(values[values.length - 1]);
+  const formattedLabels = temperatureLabels.map((label, index) =>
+  index % 3 === 0 ? label : ''
+);
+
+
+ const fetchTemperatureData = () => {
+  const tempRef = ref(db, 'Projeto/Input/Sensores/TempC');
+
+  onValue(tempRef, (snapshot) => {
+    const temp = snapshot.val();
+    if (typeof temp === 'number') {
+      const timestamp = new Date().toISOString();
+
+      setTemperatureValues(prev => [...prev.slice(-9), temp]); // mantém últimos 10
+      setTemperatureLabels(prev => [
+        ...prev.slice(-9),
+        new Date(timestamp).toLocaleDateString('pt-BR'),
+      ]);
+      setMaxTemp(prev => (prev !== null ? Math.max(prev, temp) : temp));
+      setMinTemp(prev => (prev !== null ? Math.min(prev, temp) : temp));
+      setCurrentTemp(temp);
     }
+  });
+};
+
+const resetTemperatureChart = () => {
+    setTemperatureValues([]);
+    setTemperatureLabels([]);
+    setMaxTemp(null);
+    setMinTemp(null);
+    setCurrentTemp(null);
   };
 
   const fetchRpmData = async () => {
-    const rpm1Data = await fetchData('rpmBomba1Readings');
-    const rpm2Data = await fetchData('rpmBomba2Readings');
-    const statusData = await get(ref(db, 'bombaAguaStatus'));
+    const rpm1Data = await fetchData('Projeto/Output/Atuadores/BombaM');
+    const rpm2Data = await fetchData('Projeto/Output/Atuadores/Bomba2');
+    const statusData = await get(ref(db, 'Projeto/Output/Atuadores/Bomba2'));
 
     if (rpm1Data.length > 0) setRpmBomba1(rpm1Data[rpm1Data.length - 1].value);
     if (rpm2Data.length > 0) setRpmBomba2(rpm2Data[rpm2Data.length - 1].value);
@@ -104,7 +127,8 @@ export default function TelaMonitoramento() {
 
   const reloadData = async () => {
     setLoading(true);
-    await Promise.all([fetchPhData(), fetchTemperatureData(), fetchRpmData()]);
+    await Promise.all([fetchPhData(), fetchTemperatureData(), fetchRpmData(), fetchNivelAgua()]);
+
     setLoading(false);
   };
 
@@ -114,6 +138,14 @@ export default function TelaMonitoramento() {
     setTemperatureValues([]);
     setTemperatureLabels([]);
   };
+
+  const fetchNivelAgua = async () => {
+  const data = await fetchData('Projeto/Input/Sensores/NivelReal');
+  if (data.length > 0) {
+    const ultimoValor = data[data.length - 1].value;
+    setNivelAgua(ultimoValor);
+  }
+};
   
 
   useEffect(() => {
@@ -221,13 +253,23 @@ export default function TelaMonitoramento() {
                       backgroundGradientTo: '#fff',
                       color: () => '#32CD32',
                       decimalPlaces: 1,
+                      labels: formattedLabels,
+
+
                     }}
                     bezier
                     style={styles.chart}
+                    
                   />
+
+                  
                 ) : (
                   <Text style={styles.noDataText}>Nenhum dado disponível</Text>
+                  
+
+
                 )}
+                
               </View>
             </View>
           )}
@@ -257,7 +299,37 @@ export default function TelaMonitoramento() {
               </View>
             </View>
           )}
+
+          
         </View>
+
+          {/* Tela 4 - Nível da Água */}
+               <View style={styles.screenContainer}>
+  {loading ? (
+    <ActivityIndicator size="large" color="#32CD32" />
+  ) : (
+    <View style={styles.contentContainer}>
+      <View style={styles.gaugeContainer}>
+        <Text style={styles.gaugeLabel}>Nível da Água</Text>
+        <Text style={styles.gaugeValue}>
+          {nivelAgua !== null ? `${nivelAgua.toFixed(1)}%` : 'N/A'}
+        </Text>
+        <Text style={styles.gaugeUnit}>Porcentagem</Text>
+      </View>
+
+      <View style={styles.infoBox}>
+        <Text style={styles.infoText}>
+          Nível atual do Biorreator.
+        </Text>
+      </View>
+    </View>
+  )}
+</View>
+
+       
+
+
+        
 
         
 
@@ -271,10 +343,10 @@ export default function TelaMonitoramento() {
           
 
       <View style={styles.pagination}>
-        <Text style={[styles.dot, activeScreen === 0 && styles.activeDot]}>•</Text>
-        <Text style={[styles.dot, activeScreen === 1 && styles.activeDot]}>•</Text>
-        <Text style={[styles.dot, activeScreen === 2 && styles.activeDot]}>•</Text>
-      </View>
+  {[0, 1, 2, 3].map((index) => (
+    <Text key={index} style={[styles.dot, activeScreen === index && styles.activeDot]}>•</Text>
+  ))}
+</View>
 
       <View style={styles.navBar}>
       <TouchableOpacity 
